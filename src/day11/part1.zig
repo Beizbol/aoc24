@@ -129,3 +129,27 @@ pub fn sln() !void {
     }
     std.debug.print("Day 11 Part 1\nstones: {d}\n", .{stones.items.len});
 }
+
+pub fn answers() !void {
+    // Arena Memory Allocator
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    var stones = std.ArrayList(usize).init(alloc);
+    try stones.append(125);
+    try stones.append(17);
+
+    // Expand
+    var timer = try std.time.Timer.start();
+    for (1..76) |i| {
+        timer.reset();
+        try expand(&stones);
+        const t = timer.read();
+        std.debug.print("i: {d} | t: {d}us | tally: {d}\n", .{ i, t / std.time.ns_per_us, stones.items.len });
+        if (t >= std.time.ns_per_min) {
+            std.debug.print("i: {d} took > 1 min per. Aborting.\n\n", .{i});
+            break;
+        }
+    }
+}

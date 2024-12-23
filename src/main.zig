@@ -1,8 +1,9 @@
 const std = @import("std");
+const d = @import("day11/part1.zig");
 const day = @import("day11/part2.zig");
 
 pub fn main() !void {
-    // try day.sln();
+    try d.answers();
     try day.sln();
 }
 

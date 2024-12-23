@@ -1,82 +1,64 @@
 const std = @import("std");
 
-fn digit_count(num: usize) !usize {
+fn digit_count(num: usize) usize {
     if (num == 0) return 1;
     for (0..1024) |i| {
         const pow = std.math.pow(usize, 10, i);
         if (num < pow) return i;
     }
-    return error.NotFound;
+    unreachable;
 }
 
 test "digits" {
     var n: usize = 0;
-    n = try digit_count(0);
+    n = digit_count(0);
     std.testing.expect(n == 1) catch std.debug.print("ans: 1 | got: {d}\n", .{n});
-    n = try digit_count(1);
+    n = digit_count(1);
     std.testing.expect(n == 1) catch std.debug.print("ans: 1 | got: {d}\n", .{n});
-    n = try digit_count(9);
+    n = digit_count(9);
     std.testing.expect(n == 1) catch std.debug.print("ans: 1 | got: {d}\n", .{n});
 
-    n = try digit_count(10);
+    n = digit_count(10);
     std.testing.expect(n == 2) catch std.debug.print("ans: 2 | got: {d}\n", .{n});
-    n = try digit_count(11);
+    n = digit_count(11);
     std.testing.expect(n == 2) catch std.debug.print("ans: 2 | got: {d}\n", .{n});
-    n = try digit_count(99);
+    n = digit_count(99);
     std.testing.expect(n == 2) catch std.debug.print("ans: 2 | got: {d}\n", .{n});
 
-    n = try digit_count(100);
+    n = digit_count(100);
     std.testing.expect(n == 3) catch std.debug.print("ans: 3 | got: {d}\n", .{n});
-    n = try digit_count(101);
+    n = digit_count(101);
     std.testing.expect(n == 3) catch std.debug.print("ans: 3 | got: {d}\n", .{n});
-    n = try digit_count(999);
+    n = digit_count(999);
     std.testing.expect(n == 3) catch std.debug.print("ans: 3 | got: {d}\n", .{n});
 
-    n = try digit_count(1000);
+    n = digit_count(1000);
     std.testing.expect(n == 4) catch std.debug.print("ans: 4 | got: {d}\n", .{n});
-    n = try digit_count(1001);
+    n = digit_count(1001);
     std.testing.expect(n == 4) catch std.debug.print("ans: 4 | got: {d}\n", .{n});
-    n = try digit_count(9999);
+    n = digit_count(9999);
     std.testing.expect(n == 4) catch std.debug.print("ans: 4 | got: {d}\n", .{n});
 }
 
-// const Val = struct {
-//     left: usize,
-//     right: usize,
-//     count: usize,
-// };
-
-const Pair = struct {
-    left: usize,
-    right: usize,
-    count: usize,
+const Key = struct {
+    k: usize,
+    i: usize,
 };
 
-const Solo = struct {
-    v: usize,
-    count: usize,
-};
-
-const PSet = std.AutoHashMap(usize, Pair);
-const SSet = std.AutoHashMap(usize, Solo);
+const Set = std.AutoHashMap(Key, usize);
 const List = std.ArrayList(usize);
-
 const Ctx = struct {
     input: List,
-    pair_set: PSet,
-    solo_set: SSet,
+    set: Set,
     iter: usize,
-    pairs: [76]PSet,
-    solos: [76]SSet,
+    depth: usize,
 
     pub fn init(alloc: std.mem.Allocator) !Ctx {
         return .{
             .input = List.init(alloc),
-            .pairs = .{PSet.init(alloc)} ** 76,
-            .solos = .{SSet.init(alloc)} ** 76,
-            .pair_set = PSet.init(alloc),
-            .solo_set = SSet.init(alloc),
+            .set = Set.init(alloc),
             .iter = 0,
+            .depth = 0,
         };
     }
 
@@ -85,129 +67,103 @@ const Ctx = struct {
         try ctx.input.append(n);
     }
 
-    // pub fn stones(ctx: Ctx) usize {
-
-    //     const set_count = ctx.sets[ctx.iter].count() * 2;
-    //     const list_count = ctx.lists[ctx.iter].items.len;
-    //     return set_count + list_count;
-    // }
-
-    pub fn handle_item(ctx: *Ctx, item: usize) !void {
-        if (ctx.solos[ctx.iter].getPtr(item)) |v| {
-            v.count += 1;
-            return;
-        }
-        if (ctx.pairs[ctx.iter].getPtr(item)) |v| {
-            v.count += 1;
-            return;
-        }
-        if (ctx.solo_set.get(item)) |v| {
-            try ctx.solos[ctx.iter].put(item, v);
-            return;
-        }
-        if (ctx.pair_set.get(item)) |v| {
-            try ctx.pairs[ctx.iter].put(item, v);
-            return;
-        }
-        const count = try digit_count(item);
-        if (count % 2 == 1) {
-            try ctx.solos[ctx.iter].put(item, .{ .v = item * 2024, .count = 1 });
-            try ctx.solo_set.put(item * 2024, .{ .v = item * 2024, .count = 1 });
-            return;
-        }
-
-        const pow = std.math.pow(usize, 10, count / 2);
-        const left = item / pow;
-        const right = item - (left * pow);
-        const v = Pair{ .left = left, .right = right, .count = 1 };
-        try ctx.pairs[ctx.iter].put(item, v);
-        try ctx.pair_set.put(item, v);
-    }
-
-    pub fn expand_fast(ctx: *Ctx) !void {
-        ctx.iter += 1;
-        const iter = ctx.iter - 1;
-
-        if (iter == 0) {
-            for (ctx.input.items) |item| {
-                try ctx.handle_item(item);
-            }
-            return;
-        }
-
-        // Singles
-        var solos = ctx.solos[iter].iterator();
-        while (solos.next()) |entry| {
-            try ctx.handle_item(entry.key_ptr.*);
-        }
-
-        // Pairs
-        var pairs = ctx.pairs[iter].iterator();
-        while (pairs.next()) |entry| {
-            try ctx.handle_item(entry.value_ptr.left);
-            try ctx.handle_item(entry.value_ptr.right);
-        }
-    }
-
-    pub fn tally_stats(ctx: Ctx) usize {
-        std.debug.print("tally ({d})\n", .{ctx.iter});
+    pub fn tally(ctx: *Ctx, depth: usize) !usize {
+        ctx.depth = depth;
         var total: usize = 0;
-
-        for (0..ctx.iter + 1) |_i| {
-            const i = ctx.iter - _i;
-            // std.debug.print("i:{d},iter:{d},_i:{d}\n", .{ i, iter, _i });
-            var pair_iter = ctx.pairs[i].iterator();
-            while (pair_iter.next()) |pair| {
-                const L = pair.value_ptr.left;
-                var NL: usize = 1;
-                if (i == ctx.iter) {
-                    NL = 1;
-                } else if (ctx.pairs[i + 1].get(L)) |val| {
-                    NL = val.count;
-                } else if (ctx.solos[i + 1].get(L)) |val| {
-                    NL = val.count;
-                }
-
-                const R = pair.value_ptr.right;
-                var NR: usize = 1;
-                if (i == ctx.iter) {
-                    NR = 1;
-                } else if (ctx.pairs[i + 1].get(R)) |val| {
-                    NR = val.count;
-                } else if (ctx.solos[i + 1].get(L)) |val| {
-                    NL = val.count;
-                }
-
-                pair.value_ptr.count *= NL + NR;
-                if (i == 0) {
-                    total += pair.value_ptr.count;
-                }
-            }
-
-            var solo_iter = ctx.solos[i].iterator();
-            while (solo_iter.next()) |solo| {
-                // std.debug.print("k:{d} v:{any}\n", .{ pair.key_ptr.*, pair.value_ptr.* });
-                const V = solo.value_ptr.v;
-                var NV: usize = 1;
-                if (i == ctx.iter) {
-                    NV = 1;
-                } else if (ctx.pairs[i + 1].get(V)) |val| {
-                    NV = val.count;
-                } else if (ctx.solos[i + 1].get(V)) |val| {
-                    NV = val.count;
-                }
-
-                solo.value_ptr.count *= NV;
-                if (i == 0) {
-                    total += solo.value_ptr.count;
-                }
-            }
-            // std.debug.print("i:{d},iter:{d},_i:{d}\n", .{ i, iter, _i });
+        for (ctx.input.items) |n| {
+            total += ctx.r_expand(n, 0);
         }
-
         return total;
     }
+
+    // recursive expand and tally
+    fn r_expand(ctx: *Ctx, n: usize, iter: usize) usize {
+        // if (iter == 0) return ctx.input.items.len;
+        // std.debug.print("\nExpanding: {d}\n", .{ctx.iter});
+        const i = iter + 1;
+        const even_digits = digit_count(n) % 2 == 0;
+        if (i == ctx.depth) {
+            return if (even_digits) 2 else 1;
+        }
+
+        if (n == 0) return r_expand(ctx, 1, i);
+
+        if (!even_digits) return r_expand(ctx, n * 2024, i);
+
+        const pow = std.math.pow(usize, 10, digit_count(n) / 2);
+        const left = n / pow;
+        const right = n - (left * pow);
+        return r_expand(ctx, left, i) + r_expand(ctx, right, i);
+    }
+
+    // pub fn log_set(ctx: *Ctx) void {
+    //     std.debug.print("set: {d}\n", .{ctx.set.len});
+    //     var iter = ctx.set.iterator();
+    //     while (iter.next()) |entry| {
+    //         std.debug.print("{any}\n", .{entry.key});
+    //     }
+    // }
+
+    pub fn tally_fast(ctx: *Ctx, depth: usize) !usize {
+        var total: usize = 0;
+        for (ctx.input.items) |n| {
+            total += try ctx.r_expand_fast(n, depth);
+        }
+        return total;
+    }
+
+    // recursive expand and tally
+    fn r_expand_fast(ctx: *Ctx, n: usize, iter: usize) !usize {
+        // if (iter == 0) return ctx.input.items.len;
+        // defer ctx.log_set();
+        // std.debug.print("\nExpanding: {d}\n", .{ctx.iter});
+        const key = Key{ .k = n, .i = iter };
+        const i = iter - 1;
+        if (i == 0) {
+            const even_digits = digit_count(n) % 2 == 0;
+            const _v: usize = if (even_digits) 2 else 1;
+            // try ctx.set.put(key, _v);
+            return _v;
+        }
+
+        if (n == 0) {
+            const _v = try r_expand_fast(ctx, 1, i);
+            // try ctx.set.put(key, _v);
+            return _v;
+        }
+
+        if (ctx.set.get(key)) |v| {
+            // std.debug.print("hit. key: {any}, v: {d}\n", .{ key, v });
+            return v;
+        }
+
+        const even_digits = digit_count(n) % 2 == 0;
+        if (i == 0) {
+            const _v: usize = if (even_digits) 2 else 1;
+            try ctx.set.put(key, _v);
+            return _v;
+        }
+
+        if (!even_digits) {
+            const _v = try r_expand_fast(ctx, n * 2024, i);
+            try ctx.set.put(key, _v);
+            return _v;
+        }
+
+        const pow = std.math.pow(usize, 10, digit_count(n) / 2);
+        const left = n / pow;
+        const right = n - (left * pow);
+
+        const l = try r_expand_fast(ctx, left, i);
+        const r = try r_expand_fast(ctx, right, i);
+
+        try ctx.set.put(key, l + r);
+
+        return l + r;
+    }
 };
+
+const p1 = @import("part1.zig");
 
 pub fn sln() !void {
     // Arena Memory Allocator
@@ -226,19 +182,28 @@ pub fn sln() !void {
     while (iter.next()) |stone| {
         try ctx.add_stone(stone);
     }
-    // Expand
-    for (0..75) |_| {
-        // ctx.iters[i] = Set.init(alloc);
-        try ctx.expand_fast();
-        // std.debug.print("{d}:  stones={d}  sets={d}\n", .{ i + 1, ctx.stones(), ctx.set.count() });
+    // Expand and Tally
+    var timer = try std.time.Timer.start();
+    for (1..76) |i| {
+        timer.reset();
+        const n = try ctx.tally(i);
+        const t = timer.read();
+        std.debug.print("i: {d} | t: {d}us | tally: {d}\n", .{ i, t / std.time.ns_per_us, n });
+        if (t >= std.time.ns_per_min) {
+            std.debug.print("i: {d} took > 1 min per. Aborting.\n", .{i});
+            break;
+        }
     }
-    // Tally
-    const result = ctx.tally_stats();
-    std.debug.print("Day 11 Part 2\nstats: {d}\n", .{result});
+    for (1..76) |i| {
+        timer.reset();
+        const n = try ctx.tally_fast(i);
+        const t = timer.read();
+        std.debug.print("i: {d} | t: {d}us | tally: {d}\n", .{ i, t / std.time.ns_per_us, n });
+        if (i == 75) std.debug.print("Day 11 Part 2\nstats: {d}\n", .{n});
+    }
 }
 
-test "expand fast" {
-
+test "expand 1" {
     // Arena Memory Allocator
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
@@ -247,28 +212,175 @@ test "expand fast" {
     try ctx.add_stone("125");
     try ctx.add_stone("17");
 
-    try ctx.expand_fast();
-    var n = ctx.tally_stats();
-    std.testing.expect(n == 3) catch std.debug.print("got: {d}\n", .{n});
+    const n = try ctx.tally(1);
 
-    try ctx.expand_fast();
-    n = ctx.tally_stats();
-    std.testing.expect(n == 4) catch std.debug.print("got: {d}\n", .{n});
+    std.testing.expect(n == 3) catch std.debug.print("1. got: {d}\n", .{n});
+    try std.testing.expect(n == 3);
+}
 
-    try ctx.expand_fast();
-    n = ctx.tally_stats();
-    std.testing.expect(n == 5) catch std.debug.print("got: {d}\n", .{n});
+test "expand 2" {
+    // Arena Memory Allocator
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    var ctx = try Ctx.init(alloc);
+    try ctx.add_stone("125");
+    try ctx.add_stone("17");
 
-    try ctx.expand_fast();
-    n = ctx.tally_stats();
-    std.testing.expect(n == 9) catch std.debug.print("got: {d}\n", .{n});
+    const n = try ctx.tally(2);
 
-    try ctx.expand_fast();
-    n = ctx.tally_stats();
-    std.testing.expect(n == 13) catch std.debug.print("got: {d}\n", .{n});
+    std.testing.expect(n == 4) catch std.debug.print("2. got: {d}\n", .{n});
+    try std.testing.expect(n == 4);
+}
 
-    try ctx.expand_fast();
-    n = ctx.tally_stats();
-    std.testing.expect(n == 22) catch std.debug.print("got: {d}\n", .{n});
+test "expand 3" {
+    // Arena Memory Allocator
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    var ctx = try Ctx.init(alloc);
+    try ctx.add_stone("125");
+    try ctx.add_stone("17");
+
+    const n = try ctx.tally(3);
+
+    std.testing.expect(n == 5) catch std.debug.print("3. got: {d}\n", .{n});
+    try std.testing.expect(n == 5);
+}
+
+test "expand 4" {
+    // Arena Memory Allocator
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    var ctx = try Ctx.init(alloc);
+    try ctx.add_stone("125");
+    try ctx.add_stone("17");
+
+    const n = try ctx.tally(4);
+
+    std.testing.expect(n == 9) catch std.debug.print("4. got: {d}\n", .{n});
+    try std.testing.expect(n == 9);
+}
+
+test "expand 5" {
+    // Arena Memory Allocator
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    var ctx = try Ctx.init(alloc);
+    try ctx.add_stone("125");
+    try ctx.add_stone("17");
+
+    const n = try ctx.tally(5);
+
+    std.testing.expect(n == 13) catch std.debug.print("5. got: {d}\n", .{n});
+    try std.testing.expect(n == 13);
+}
+
+pub fn run_and_debug() !void {
+    // Arena Memory Allocator
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    var ctx = try Ctx.init(alloc);
+    try ctx.add_stone("125");
+    try ctx.add_stone("17");
+
+    for (1..76) |i| {
+        const n = try ctx.tally(i);
+        std.debug.print("i: {d} | tally: {d}\n", .{ i, n });
+    }
+}
+
+test "expand 6" {
+    // Arena Memory Allocator
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    var ctx = try Ctx.init(alloc);
+    try ctx.add_stone("125");
+    try ctx.add_stone("17");
+
+    const n = try ctx.tally(6);
+
+    std.testing.expect(n == 22) catch std.debug.print("6 got: {d}\n", .{n});
     try std.testing.expect(n == 22);
+}
+
+test "rec expand 25" {
+    // Arena Memory Allocator
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    var ctx = try Ctx.init(alloc);
+    try ctx.add_stone("125");
+    try ctx.add_stone("17");
+
+    const ans_list = [_]usize{ 3, 4, 5, 9, 13, 22, 31, 42, 68, 109, 170, 235, 342, 557, 853, 1298, 1951, 2869, 4490, 6837, 10362, 15754, 23435, 36359, 55312, 83230 };
+
+    for (ans_list, 1..) |ans, i| {
+        // std.debug.print("testing: {d}\n", .{i});
+        const n = try ctx.tally(i);
+        // std.debug.print("i:{d}, ans:{d}, tally: {d}\n", .{ i, ans, n });
+        try std.testing.expect(n == ans);
+    }
+}
+
+test "struct as map key" {
+    // Arena Memory Allocator
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    var set = Set.init(alloc);
+    const key = Key{ .k = 1, .i = 2 };
+    try set.put(key, 3);
+    // std.debug.print("put (3): {any}\n", .{key});
+    if (set.get(key)) |v| {
+        try std.testing.expect(v == 3);
+        // std.debug.print("got (3).\n", .{});
+    }
+
+    const key1 = Key{ .k = 2, .i = 2 };
+    if (set.get(key1)) |v| {
+        std.debug.print("key1:{any}\nfound:{any}\n", .{ key1, v });
+        try std.testing.expect(v != v);
+    }
+
+    const key2 = Key{ .k = 1, .i = 3 };
+    if (set.get(key2)) |v| {
+        std.debug.print("key2:{any}\nfound:{any}\n", .{ key2, v });
+        try std.testing.expect(v != v);
+    }
+    const key3 = Key{ .k = 2, .i = 3 };
+    if (set.get(key3)) |v| {
+        std.debug.print("key3:{any}\nfound:{any}\n", .{ key3, v });
+        try std.testing.expect(v != v);
+    }
+}
+
+test "fast expand 25" {
+    // Arena Memory Allocator
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    var ctx = try Ctx.init(alloc);
+    try ctx.add_stone("125");
+    try ctx.add_stone("17");
+
+    const ans_list = [_]usize{ 3, 4, 5, 9, 13, 22, 31, 42, 68, 109, 170, 235, 342, 557, 853, 1298, 1951, 2869, 4490, 6837, 10362, 15754, 23435, 36359, 55312, 83230 };
+
+    var failed = false;
+    for (ans_list, 1..) |ans, i| {
+        const n = try ctx.tally_fast(i);
+        std.debug.print("i:{d}, ans:{d}, tally: {d}\n", .{ i, ans, n });
+        std.testing.expect(n == ans) catch {
+            std.debug.print("i:{d}, ans:{d}, tally: {d}\n", .{ i, ans, n });
+            failed = true;
+        };
+    }
+    try std.testing.expect(failed == false);
 }
